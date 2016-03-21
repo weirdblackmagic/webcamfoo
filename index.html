@@ -1,0 +1,168 @@
+<html>
+    <head>
+        <title>webgl webcam</title>
+        <script charset="utf-8" src="js/three.js"></script>
+        <script charset="utf-8" src="shaders/CopyShader.js"></script>
+        <script src="shaders/DotScreenShader.js"></script>
+		<script src="shaders/RGBShiftShader.js"></script>
+        <script src="shaders/DigitalGlitch.js"></script>
+        <script src="shaders/FilmShader.js"></script>
+
+        <script src="postprocessing/EffectComposer.js"></script>
+		<script src="postprocessing/RenderPass.js"></script>
+		<script src="postprocessing/MaskPass.js"></script>
+		<script src="postprocessing/ShaderPass.js"></script>
+        <script src="postprocessing/GlitchPass.js"></script>
+
+        <style media="screen">
+            #threejs {
+                position: absolute;
+                left: 0px;
+                top: 0px;
+            }
+
+        </style>
+    </head>
+    <body>
+        <video id="livevideo" autoplay style="display:none"></video>
+        <canvas id="videoimage" width="640" height="480" style="display:none"></canvas>
+
+        <div id="threejs"></div>
+
+        <script charset="utf-8">
+        // Sources
+        // threejs exaples
+        // https://github.com/stemkoski/stemkoski.github.com/blob/master/Three.js/Webcam-Texture.html
+        // thanks fot that :)
+
+            navigator.getUserMedia = navigator.getUserMedia ||
+                                    navigator.webkitGetUserMedia ||
+                                    navigator.mozGetUserMedia ||
+                                    navigator.msGetUserMedia;
+
+
+            function errorCallback(error) {
+                if (error) {
+                    console.log(":(" + error);
+                }
+            }
+
+            var video = document.getElementById("livevideo");
+
+            if (navigator.getUserMedia) {
+                navigator.getUserMedia({video: true, audio: false}, function (stream) {
+                    video.src = window.URL.createObjectURL(stream);
+                }, errorCallback);
+            }
+
+            // standard global variables
+            var container, scene, camera, renderer, controls, stats, composer;
+
+            // custom global variables
+            var videoLive, videoImage, videoImageContext, videoTexture;
+
+            init();
+            animate();
+
+            function init() {
+                // SCENE
+            	scene = new THREE.Scene();
+
+                // CAMERA
+            	var SCREEN_WIDTH = window.innerWidth, SCREEN_HEIGHT = window.innerHeight;
+            	var VIEW_ANGLE = 35, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000;
+            	camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
+            	scene.add(camera);
+            	camera.position.set(0, 0, 400);
+            	camera.lookAt(scene.position);
+
+            	// RENDERER
+            	renderer = new THREE.WebGLRenderer( {antialias:true} );
+                renderer.setPixelRatio( window.devicePixelRatio );
+            	renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+            	container = document.getElementById( 'threejs' );
+            	container.appendChild( renderer.domElement );
+
+            	// LIGHT
+            	var light = new THREE.PointLight(0xffffff);
+            	light.position.set(0,250,0);
+            	scene.add(light);
+
+            	// SKYBOX/FOG
+            	scene.fog = new THREE.FogExp2( 0x9999ff, 0.00025 );
+
+            	// VIDEO
+            	videoLive = document.getElementById( 'livevideo' );
+
+            	videoImage = document.getElementById( 'videoimage' );
+            	videoImageContext = videoImage.getContext( '2d' );
+
+            	videoTexture = new THREE.Texture( videoImage );
+            	videoTexture.minFilter = THREE.LinearFilter;
+            	videoTexture.magFilter = THREE.LinearFilter;
+
+            	var movieMaterial = new THREE.MeshBasicMaterial( { map: videoTexture, overdraw: true, side:THREE.DoubleSide } );
+            	// the geometry on which the movie will be displayed;
+            	// 	movie image will be scaled to fit these dimensions.
+            	var movieGeometry = new THREE.PlaneGeometry( videoImage.width, videoImage.height, 1, 1 );
+
+            	var movieScreen = new THREE.Mesh( movieGeometry, movieMaterial );
+            	movieScreen.position.set(0,0,0);
+            	scene.add(movieScreen);
+
+            	camera.position.set(0,0,600);
+            	camera.lookAt(movieScreen.position);
+
+
+                composer = new THREE.EffectComposer( renderer );
+                composer.addPass( new THREE.RenderPass( scene, camera ) );
+
+				//var effect = new THREE.ShaderPass( THREE.DotScreenShader );
+                //effect.uniforms[ 'scale' ].value = 4;
+				//effect.uniforms[ 'amount' ].value = 0.0015;
+                //effect.renderToScreen = true;
+				//composer.addPass( effect );
+
+                var glitch = new THREE.GlitchPass();
+                //glitch.renderToScreen = true;
+                composer.addPass(glitch);
+
+                var effect = new THREE.ShaderPass( THREE.FilmShader );
+                effect.renderToScreen = true;
+				composer.addPass( effect );
+
+                window.addEventListener( 'resize', onWindowResize, false );
+            };
+
+            function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+            function animate() {
+                update();
+                render();
+                requestAnimationFrame(animate);
+            };
+
+            function update() {
+
+            };
+
+            function render() {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    videoImageContext.drawImage( videoLive, 0, 0, videoImage.width, videoImage.height );
+                    if (videoTexture) {
+                        videoTexture.needsUpdate = true;
+                    }
+                }
+
+                composer.render();
+            };
+        </script>
+    </body>
+</html>
